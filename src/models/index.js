@@ -1,0 +1,47 @@
+// Barrel that imports every model so Mongoose registers all schemas at startup.
+// Import this once (in app.js) to make populate() work regardless of route imports.
+export { User, ROLES, PLATFORM_ROLES } from './User.js';
+export { Organization } from './Organization.js';
+export { Plan } from './Plan.js';
+export { SubscriptionPayment } from './SubscriptionPayment.js';
+export { OrgProfile } from './OrgProfile.js';
+export { Notification } from './Notification.js';
+export { ProformaInvoice } from './ProformaInvoice.js';
+export { GstInvoice } from './GstInvoice.js';
+export { InclusionExclusion } from './InclusionExclusion.js';
+export { Team } from './Team.js';
+export { Destination } from './Destination.js';
+export { QuerySource } from './QuerySource.js';
+export { Tag } from './Tag.js';
+export { Counter } from './Counter.js';
+export { Query } from './Query.js';
+export { Quote } from './Quote.js';
+export { Booking } from './Booking.js';
+export { Payment } from './Payment.js';
+export { Installment } from './Installment.js';
+export { Comment } from './Comment.js';
+export { Option } from './Option.js';
+export { HotelNote } from './HotelNote.js';
+export { City } from './City.js';
+export { State } from './State.js';
+export { Hotel } from './Hotel.js';
+export { HotelPrice } from './HotelPrice.js';
+export { TransportService } from './TransportService.js';
+export { TransportPrice } from './TransportPrice.js';
+export { TravelActivity } from './TravelActivity.js';
+export { TravelActivityPrice } from './TravelActivityPrice.js';
+export { ServiceBooking, SERVICE_BOOKING_KINDS, SERVICE_BOOKING_STATUSES } from './ServiceBooking.js';
+export { Account } from './Account.js';
+export { Transaction } from './Transaction.js';
+export { PaymentGateway } from './PaymentGateway.js';
+export { GatewayTransaction } from './GatewayTransaction.js';
+export { Activity } from './Activity.js';
+export { WhatsappTemplate } from './WhatsappTemplate.js';
+export { WhatsappConnection } from './WhatsappConnection.js';
+// Lead sources & assignment
+export { Visitor } from './Visitor.js';
+export { LeadSettings } from './LeadSettings.js';
+export { AssignmentRule } from './AssignmentRule.js';
+export { AssignmentLog } from './AssignmentLog.js';
+export { TrackingLink } from './TrackingLink.js';
+export { AdSpend } from './AdSpend.js';

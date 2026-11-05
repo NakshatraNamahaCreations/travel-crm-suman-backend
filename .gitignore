@@ -1,0 +1,22 @@
+# Secrets. .env holds the Mongo password, the JWT secret and the WhatsApp gateway key — a
+# single commit of it is a credential leak that survives in git history even after a later
+# delete. Deployment platforms take these from their own dashboard instead.
+.env
+.env.*
+!.env.example
+
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# Runtime output
+uploads/
+tmp/
+dist/
+*.log
+
+# Local tooling
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

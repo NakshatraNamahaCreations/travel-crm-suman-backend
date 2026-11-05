@@ -1,0 +1,91 @@
+# Render Blueprint for the Travel CRM API.
+#
+# Commit this at the repository root that Render points at (set `rootDir` below if the server
+# lives in a subfolder), then: Render dashboard -> New -> Blueprint -> pick the repo.
+#
+# Docker rather than Render's native Node runtime, because the native runtime has no Chromium
+# and every PDF the CRM generates needs one. See the Dockerfile for why that matters.
+
+services:
+  - type: web
+    name: travel-crm-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    # Set this if the repo root is the project root and the server sits in a subfolder:
+    # rootDir: server
+    region: singapore          # closest Render region to India — keeps Atlas latency low
+    plan: starter              # NOT free: see the note on spin-down below
+    healthCheckPath: /health
+    autoDeploy: true
+
+    # A disk is optional. It is here because the PDF renderer caches downloaded hotel images,
+    # and without it every deploy makes the next few PDFs re-download everything. Remove the
+    # block (and PDF_CACHE_DIR) if you would rather not pay for it — PDFs still work, they are
+    # just slower right after a deploy.
+    disk:
+      name: pdf-cache
+      mountPath: /var/data
+      sizeGB: 1
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PDF_CACHE_DIR
+        value: /var/data/img-cache
+      # Chromium's path inside the image. The PDF renderer already probes /usr/bin/chromium,
+      # so this is explicit rather than required.
+      - key: CHROME_PATH
+        value: /usr/bin/chromium
+
+      # ---- Set these in the Render dashboard, never in this file ----
+      # sync: false means "prompt me for a value and keep it out of git".
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+
+      # Public origins. CLIENT_URL accepts a comma-separated list and MUST contain every
+      # front end that talks to this API, or CORS will block the browser before the request
+      # is ever made. PUBLIC_BASE_URL is this API's own address: it is baked into the
+      # customer-facing document links and into the website tracking script, so a wrong value
+      # here produces links that open on nobody's phone.
+      - key: CLIENT_URL
+        sync: false
+      - key: PUBLIC_BASE_URL
+        sync: false
+
+      # WhatsApp. 'openwa' drives a self-hosted gateway; 'gallabox' uses the official
+      # Business API. OPENWA_BASE_URL must be an address this container can actually reach —
+      # a localhost URL points at this container itself, not at the machine running the
+      # gateway.
+      - key: WHATSAPP_PROVIDER
+        sync: false
+      - key: WHATSAPP_AUTO_ENQUIRY
+        sync: false
+      - key: OPENWA_BASE_URL
+        sync: false
+      - key: OPENWA_API_KEY
+        sync: false
+
+      - key: CLOUDINARY_URL
+        sync: false
+      - key: EMAIL_HOST
+        sync: false
+      - key: EMAIL_USER
+        sync: false
+      - key: EMAIL_PASS
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+
+# Notes that do not fit in a field:
+#
+# 1. PORT — Render injects it and the server already reads process.env.PORT. Do not set it.
+#
+# 2. plan: starter, not free. A free service sleeps after 15 minutes idle and takes ~50s to
+#    wake. Every one of those seconds happens while a visitor's browser is posting an enquiry
+#    from a tracked ad click, and they will have closed the tab long before it answers.
+#
+# 3. MongoDB Atlas — Render's outbound IPs are not static on this plan, so Atlas needs
+#    Network Access set to 0.0.0.0/0, with the database user's password doing the real work.
+#    Use a dedicated user for this service, not the cluster admin.

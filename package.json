@@ -1,0 +1,43 @@
+{
+  "name": "travel-crm-server",
+  "version": "0.1.0",
+  "description": "Travel CRM REST API (Express + Mongoose)",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js",
+    "seed": "node src/seed/index.js",
+    "seed:demo": "node src/seed/demo-data.mjs",
+    "seed:options": "node src/seed/seed-options.js",
+    "seed:locations": "node src/seed/seed-locations.js",
+    "bootstrap:owner": "node src/seed/create-owner.mjs",
+    "migrate:multitenant": "node src/migrations/2026-07-multitenant.mjs",
+    "import:hotels": "node src/import/run-hotels.mjs",
+    "import:activities": "node src/import/run-activities.mjs",
+    "import:transport": "node src/import/run-transport.mjs",
+    "import:all": "node src/import/run-hotels.mjs && node src/import/run-activities.mjs && node src/import/run-transport.mjs"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cloudinary": "^2.10.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.4.0",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.6.0",
+    "morgan": "^1.10.0",
+    "multer": "^1.4.5-lts.1",
+    "nodemailer": "^6.10.1",
+    "puppeteer-core": "^23.11.1",
+    "sharp": "^0.35.3",
+    "xlsx": "^0.18.5",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
+  }
+}
