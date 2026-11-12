@@ -16,7 +16,8 @@
     "import:hotels": "node src/import/run-hotels.mjs",
     "import:activities": "node src/import/run-activities.mjs",
     "import:transport": "node src/import/run-transport.mjs",
-    "import:all": "node src/import/run-hotels.mjs && node src/import/run-activities.mjs && node src/import/run-transport.mjs"
+    "import:all": "node src/import/run-hotels.mjs && node src/import/run-activities.mjs && node src/import/run-transport.mjs",
+    "provision:tenant": "node src/seed/provision-tenant.mjs"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
