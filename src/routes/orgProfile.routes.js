@@ -6,6 +6,7 @@ import { ok } from '../utils/apiResponse.js';
 import { ApiError } from '../utils/ApiError.js';
 import { uploadImage, uploadImageUnique, cloudinaryEnabled } from '../utils/cloudinary.js';
 import { DEFAULT_COLORS, COLOR_ROLES, cleanColor } from '../utils/quotationTheme.js';
+import { QUOTATION_TEMPLATES } from '../pdf/renderQuotation.js';
 import { company } from '../config/company.js';
 
 const router = Router();
@@ -44,6 +45,24 @@ function cleanQuotation(input) {
   if (input === undefined) return undefined;
   if (input === null || typeof input !== 'object') throw ApiError.badRequest('Invalid quotation settings');
   const out = {};
+
+  if (input.template !== undefined) {
+    if (!QUOTATION_TEMPLATES.some((t) => t.key === input.template)) {
+      throw ApiError.badRequest(`Unknown layout: ${input.template}`);
+    }
+    out.template = input.template;
+  }
+  if (input.tagline !== undefined) out.tagline = String(input.tagline || '').trim().slice(0, 120) || undefined;
+  // An empty watermark means "use the brand name"; a single space switches it off. Both are
+  // meaningful, so neither is normalized away here.
+  if (input.watermark !== undefined) out.watermark = String(input.watermark ?? '').slice(0, 60);
+  if (input.whyUs !== undefined) {
+    if (!Array.isArray(input.whyUs)) throw ApiError.badRequest('Why-us points must be a list');
+    out.whyUs = input.whyUs
+      .map((w) => ({ title: String(w?.title || '').trim().slice(0, 80), text: String(w?.text || '').trim().slice(0, 300) }))
+      .filter((w) => w.title || w.text)
+      .slice(0, 12);
+  }
 
   if (input.colors !== undefined) {
     const colors = {};
@@ -112,6 +131,7 @@ router.get('/', asyncHandler(async (req, res) => ok(res, await OrgProfile.getFor
 // back to, so the editor can offer "reset to default" without hard-coding a second copy of them.
 router.get('/quotation-defaults', asyncHandler(async (req, res) => ok(res, {
   colors: DEFAULT_COLORS,
+  templates: QUOTATION_TEMPLATES,
   roles: COLOR_ROLES,
   terms: (company.termsAndConditions || []).map((s, i) => ({ ...s, order: i })),
   bookingTerms: company.bookingTerms || '',

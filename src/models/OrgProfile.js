@@ -93,6 +93,24 @@ const orgProfileSchema = new mongoose.Schema(
     // unset falls back to the static config the document used before this existed, so an
     // organization that never opens the editor sees no change at all.
     quotation: {
+      // Which layout the document uses. 'classic' is the brochure-style original; 'modern'
+      // is the letterhead-and-sections layout. Kept as a choice rather than a replacement
+      // because an organization already sending the classic one must not have its documents
+      // change shape underneath it.
+      template: { type: String, enum: ['classic', 'modern'], default: 'classic' },
+      // Printed under the destination name on the cover: "Where Every Moment Feels Like Magic".
+      tagline: { type: String, trim: true },
+      // Closing page selling points.
+      whyUs: {
+        type: [new mongoose.Schema(
+          { title: { type: String, trim: true }, text: { type: String, trim: true } },
+          { _id: true }
+        )],
+        default: undefined,
+      },
+      // Faint repeating wordmark behind each page, as on a printed brochure. Defaults to the
+      // brand name when left empty; set to a single space to switch it off.
+      watermark: { type: String, trim: true },
       colors: {
         primary: { type: String, trim: true }, // headings, section bars, cover text
         accent: { type: String, trim: true }, // price highlights, call-outs

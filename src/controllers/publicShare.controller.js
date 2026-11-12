@@ -5,7 +5,7 @@ import { OrgProfile } from '../models/OrgProfile.js';
 import { loadFullQuote } from './quote.controller.js';
 import { buildReceiptPdf } from './installment.controller.js';
 import { buildGstInvoicePdf } from './gstInvoice.controller.js';
-import { quotationHtml } from '../pdf/quotationHtml.js';
+import { renderQuotation } from '../pdf/renderQuotation.js';
 import { voucherHtml } from '../pdf/voucherHtml.js';
 import { htmlToPdf } from '../pdf/renderPdf.js';
 import { runWithTenant } from '../tenant/context.js';
@@ -29,7 +29,7 @@ const KINDS = {
     build: async (doc) => {
       const quote = await loadFullQuote(doc._id);
       const org = await OrgProfile.getFor(doc.organization).catch(() => null);
-      const pdf = await htmlToPdf(quotationHtml(quote.toObject(), org?.toObject()));
+      const pdf = await htmlToPdf(renderQuotation(quote.toObject(), org?.toObject()));
       return { pdf, filename: `Quotation-${quote.quoteNumber}.pdf` };
     },
   },

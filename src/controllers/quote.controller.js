@@ -8,7 +8,7 @@ import { InclusionExclusion } from '../models/InclusionExclusion.js';
 import { ApiError } from '../utils/ApiError.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ok, created } from '../utils/apiResponse.js';
-import { quotationHtml } from '../pdf/quotationHtml.js';
+import { renderQuotation } from '../pdf/renderQuotation.js';
 import { voucherHtml } from '../pdf/voucherHtml.js';
 import { OrgProfile } from '../models/OrgProfile.js';
 import { htmlToPdf } from '../pdf/renderPdf.js';
@@ -60,7 +60,9 @@ async function afterConvertedEdit(quote, userId) {
 
 const POPULATE = [
   { path: 'days.destination', select: 'name' },
-  { path: 'createdBy', select: 'name' },
+  // The quotation prints whoever built it as the guest's holiday consultant, so their phone
+  // is needed too — a consultant block with a name and no number is a dead end for the guest.
+  { path: 'createdBy', select: 'name phone email' },
 ];
 
 // Reflect a quote's value onto its parent query for the pipeline/reports.
@@ -360,7 +362,8 @@ const pdfCacheDir = process.env.PDF_CACHE_DIR || path.join(os.tmpdir(), 'tcrm-im
 function quotePdfCacheFile(quote, org) {
   // Bump RENDER_VERSION when the template or bundled assets change, so cached
   // PDFs from the older look are re-rendered.
-  const RENDER_VERSION = 'v19';
+  // v20: the document became per-organization (palette, destination cover banner, Terms).
+  const RENDER_VERSION = 'v20';
   const stamp = crypto.createHash('sha1')
     .update(RENDER_VERSION)
     .update(String(quote._id))
@@ -401,7 +404,7 @@ export function warmQuotePdfCache(quoteId, organizationId) {
       const cacheFile = quotePdfCacheFile(quote, org);
       if (fs.existsSync(cacheFile)) return;
       const t0 = Date.now();
-      const pdf = await htmlToPdf(quotationHtml(quote.toObject(), org?.toObject()));
+      const pdf = await htmlToPdf(renderQuotation(quote.toObject(), org?.toObject()));
       writeQuotePdfCache(cacheFile, quote._id, pdf);
       console.log(`[pdf] pre-warmed quote #${quote.quoteNumber} in ${Date.now() - t0}ms`);
     } catch (e) {
@@ -418,7 +421,7 @@ export const quotePdf = asyncHandler(async (req, res) => {
   const org = await OrgProfile.getFor(req.organizationId).catch(() => null);
   if (req.query.format === 'html') {
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    return res.send(quotationHtml(quote.toObject(), org?.toObject()));
+    return res.send(renderQuotation(quote.toObject(), org?.toObject()));
   }
 
   res.setHeader('Content-Type', 'application/pdf');
@@ -429,7 +432,7 @@ export const quotePdf = asyncHandler(async (req, res) => {
     if (fs.existsSync(cacheFile)) return res.send(fs.readFileSync(cacheFile));
   } catch { /* fall through to a fresh render */ }
 
-  const pdf = await htmlToPdf(quotationHtml(quote.toObject(), org?.toObject()));
+  const pdf = await htmlToPdf(renderQuotation(quote.toObject(), org?.toObject()));
   writeQuotePdfCache(cacheFile, quote._id, pdf);
   return res.send(pdf);
 });
@@ -445,7 +448,7 @@ export const emailQuote = asyncHandler(async (req, res) => {
   if (!to) throw ApiError.badRequest('No recipient — guest has no email on file and none was provided');
 
   const org = await OrgProfile.getFor(req.organizationId).catch(() => null);
-  const pdf = await htmlToPdf(quotationHtml(obj, org?.toObject()));
+  const pdf = await htmlToPdf(renderQuotation(obj, org?.toObject()));
   const guestName = [obj.query?.guest?.salutation, obj.query?.guest?.name].filter(Boolean).join(' ') || 'Guest';
   await sendMail({
     to,
@@ -475,7 +478,7 @@ export const shareEmail = asyncHandler(async (req, res) => {
   const attachments = [];
   if (req.body.attachPdf) {
     const org = await OrgProfile.getFor(req.organizationId).catch(() => null);
-    const pdf = await htmlToPdf(quotationHtml(obj, org?.toObject()));
+    const pdf = await htmlToPdf(renderQuotation(obj, org?.toObject()));
     attachments.push({ filename: `Package-${quote.quoteNumber}.pdf`, content: pdf });
   }
 
