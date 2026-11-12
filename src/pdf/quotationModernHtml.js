@@ -26,6 +26,8 @@ const fmtLong = (d) => (d ? new Date(d).toLocaleDateString('en-GB', { weekday: '
 const fmtDayMon = (d) => (d ? new Date(d).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) : '');
 const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
 const ord = (n) => { const s = ['th', 'st', 'nd', 'rd']; const v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); };
+/** "11th Nov" — the hotel check-in shorthand. Repeating the year in every card is noise. */
+const fmtOrdDay = (d) => (d ? `${ord(new Date(d).getDate())} ${new Date(d).toLocaleDateString('en-GB', { month: 'short' })}` : '');
 const stars = (n) => '&#9733;'.repeat(Math.min(Math.max(Number(n) || 0, 0), 5)) + '&#9734;'.repeat(Math.max(0, 5 - Math.min(Number(n) || 0, 5)));
 const uniq = (a) => [...new Set(a.filter(Boolean))];
 /** Strips the HTML an agent's rich-text description may contain, for places that need plain
@@ -36,7 +38,7 @@ const plain = (s) => String(s || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g,
 
 const header = (org) => `
 <div class="sheet-head">
-  ${org.logo ? `<img class="hd-logo" src="${esc(org.logo)}" alt="">` : `<span class="hd-word">${esc(org.name)}</span>`}
+  ${org.logo ? `<img class="hd-logo" src="${esc(org.logo)}" alt="" onerror="this.remove()">` : ''}<span class="hd-word">${esc(org.name)}</span>
   ${org.website ? `<span class="hd-site">${esc(org.websiteLabel)}</span>` : ''}
 </div>`;
 
@@ -47,7 +49,7 @@ const footer = (org) => `
     ${org.email ? `<span>&#9993; ${esc(org.email)}</span>` : ''}
     ${org.address ? `<span>&#8962; ${esc(org.address)}</span>` : ''}
   </div>
-  ${org.logo ? `<img class="ft-logo" src="${esc(org.logo)}" alt="">` : ''}
+  ${org.logo ? `<img class="ft-logo" src="${esc(org.logo)}" alt="" onerror="this.remove()">` : ''}
 </div>`;
 
 /** One printed page. The watermark is repeated text rather than an image so it scales with
@@ -55,12 +57,16 @@ const footer = (org) => `
 const page = (org, body, { cover = false } = {}) => `
 <section class="sheet${cover ? ' cover' : ''}">
   ${cover ? '' : header(org)}
-  ${org.watermark ? `<div class="wm">${Array.from({ length: 14 }, () => esc(org.watermark)).join(' &bull; ')}</div>` : ''}
+  ${!cover && org.watermark ? `<div class="wm">${Array.from({ length: 14 }, () => esc(org.watermark)).join(' &bull; ')}</div>` : ''}
   <div class="sheet-body">${body}</div>
   ${cover ? '' : footer(org)}
 </section>`;
 
 const band = (title) => `<div class="band">${esc(title)}</div>`;
+
+/** The centred title plate a quote page opens with: solid brand colour, accent outline, white
+ *  caps. Distinct from `band`, which only labels a section further down the same page. */
+const titleBand = (title) => `<div class="tband">${esc(title)}</div>`;
 
 /* --------------------------- organization profile -------------------------- */
 
@@ -118,7 +124,15 @@ export function quotationModernHtml(q, org = null) {
   const guestName = [guest.salutation, guest.name].filter(Boolean).join(' ') || 'Traveller';
   const consultant = q.createdBy || null;
 
-  const totalRooms = primary.reduce((s, h) => s + (Number(h.rooms) || 0), 0);
+  // A group that books 40 rooms in Srinagar and 40 in Gulmarg still needs 40 rooms: the same
+  // rooms are re-occupied in each city. Summing them printed three times the real figure.
+  const totalRooms = primary.reduce((m, h) => Math.max(m, Number(h.rooms) || 0), 0);
+  // The printed document names the pick-up point here rather than repeating the cities,
+  // which the hotels page already lists in full.
+  const pickUp = (() => {
+    const hit = (pkg.transports || []).find((x) => /pick[- ]?up|arrival|airport|station/i.test(x.serviceLocation || ''));
+    return String(hit?.serviceLocation || '').replace(/s*[-—]?s*(pick[- ]?up|drop)s*$/i, '').trim();
+  })();
   const starSet = uniq(primary.map((h) => h.hotel?.stars || h.stars).filter(Boolean));
   const mealSet = uniq(primary.map((h) => h.mealPlan));
   const vehicleSet = uniq(
@@ -137,9 +151,9 @@ export function quotationModernHtml(q, org = null) {
     [guestName, pax ? `${pax} ${pax === 1 ? 'Person' : 'Persons'}` : ''],
   ];
   const coverPage = `
-    ${theme.banner.image ? `<img class="cv-hero" src="${esc(theme.banner.image)}" alt="">` : '<div class="cv-hero cv-hero-blank"></div>'}
+    ${theme.banner.image ? `<img class="cv-hero" src="${esc(theme.banner.image)}" alt="" onerror="this.remove()">` : '<div class="cv-hero cv-hero-blank"></div>'}
     <div class="cv-veil"></div>
-    ${info.logo ? `<img class="cv-logo" src="${esc(info.logo)}" alt="">` : `<div class="cv-logo-word">${esc(info.name)}</div>`}
+    ${info.logo ? `<img class="cv-logo" src="${esc(info.logo)}" alt="" onerror="this.remove()">` : ''}<div class="cv-logo-word">${esc(info.name)}</div>
     <div class="cv-title">
       <h1>${esc(destLine)}</h1>
       ${info.tagline ? `<div class="cv-tag">${esc(info.tagline)}</div>` : ''}
@@ -173,14 +187,16 @@ export function quotationModernHtml(q, org = null) {
     ['Duration', nights ? `${nights} Nights / ${nights + 1} Days` : ''],
     ['Pax', pax ? `${pax} ${pax === 1 ? 'Person' : 'Persons'}${children ? ` (${adults} adult${adults === 1 ? '' : 's'}, ${children} child${children === 1 ? '' : 'ren'})` : ''}` : ''],
     ['Travel Type', pkg.name || ''],
-    ['Rooms', totalRooms ? `${totalRooms} Room${totalRooms === 1 ? '' : 's'}${starSet.length === 1 ? ` &bull; ${starSet[0]} Star` : ''}` : ''],
-    ['Stay', cities.join(', ')],
+    // A literal bullet, not the `&bull;` entity: these values are escaped on the way out, which
+    // would turn an entity into visible "&bull;" text.
+    ['Rooms', totalRooms ? `${totalRooms} Room${totalRooms === 1 ? '' : 's'}${starSet.length === 1 ? ` • ${starSet[0]} Star` : ''}` : ''],
+    [pickUp ? 'Pick-up / Drop' : 'Stay', pickUp || cities.join(', ')],
     ['End Date', end ? fmtDate(end) : ''],
     ['Vehicles', vehicleSet.join(', ')],
   ].filter(([, v]) => v);
 
   const summaryPage = `
-    ${band(`QUOTE${pax ? ` &bull; ${pax} ${pax === 1 ? 'PERSON' : 'PERSONS'}` : ''}`)}
+    ${titleBand(`${pkg.name ? `${pkg.name} ` : ''}Quote${pax ? ` • ${pax} ${pax === 1 ? 'Person' : 'Persons'}` : ''}`)}
     <p class="greet">Dear <b>${esc(guestName)}</b>,</p>
     <p class="greet">Warm greetings from <b>${esc(info.name)}</b>!</p>
     <p class="lead">
@@ -189,14 +205,14 @@ export function quotationModernHtml(q, org = null) {
       Please go through it and let us know if you would like any changes. Contact details are at the end.
     </p>
     <div class="facts">
-      ${facts.map(([k, v]) => `<div class="fact"><div class="fk">${k.toUpperCase()}</div><div class="fv">${v}</div></div>`).join('')}
+      ${facts.map(([k, v]) => `<div class="fact"><div class="fk">${esc(k).toUpperCase()}</div><div class="fv">${esc(v)}</div></div>`).join('')}
     </div>
     ${band('Quote Price')}
     <table class="price">
       <thead><tr><th>Per Person (${esc(q.currency || 'INR')})</th><th>Total${pax ? ` for ${pax} ${pax === 1 ? 'Person' : 'Persons'}` : ''} (${esc(q.currency || 'INR')})</th></tr></thead>
       <tbody><tr>
         <td><span class="big">${num(perPerson)} /-</span><small>per person</small></td>
-        <td><span class="big">${num(total)} /-</span>${pax ? `<small>${pax} &times; ${num(perPerson)}</small>` : ''}</td>
+        <td><span class="big">${num(total)} /-</span>${pax ? `<small>${pax} ${pax === 1 ? 'person' : 'persons'} &times; ${num(perPerson)}</small>` : ''}</td>
       </tr></tbody>
     </table>
     ${total ? `<div class="advance"><b>Advance to confirm booking:</b> ${advancePct}% of total package cost = <b>${inr(advance)}</b></div>` : ''}
@@ -210,7 +226,7 @@ export function quotationModernHtml(q, org = null) {
     const alts = hotels.filter((a) => a.isAlternative && String(a.city || '') === String(h.city || '')
       && (a.nights || []).join() === (h.nights || []).join());
     const options = [h, ...alts];
-    const checkIn = start && (h.nights || [])[0] ? fmtDate(addDays(start, (h.nights[0] - 1))) : '';
+    const checkIn = start && (h.nights || [])[0] ? fmtOrdDay(addDays(start, (h.nights[0] - 1))) : '';
     const photo = h.hotel?.imageUrl || '';
     return `
     <div class="hcard">
@@ -228,7 +244,7 @@ export function quotationModernHtml(q, org = null) {
           ${h.roomType ? `<div><div class="fk">ROOM TYPE</div><div class="fv">${esc(h.roomType)}</div></div>` : ''}
         </div>
       </div>
-      ${photo ? `<figure class="hpic"><img src="${esc(photo)}" alt=""><figcaption>${esc(h.city || '')}</figcaption></figure>` : ''}
+      ${photo ? `<figure class="hpic"><img src="${esc(photo)}" alt="" onerror="this.closest('figure').remove()"><figcaption>${esc(h.city || '')}</figcaption></figure>` : ''}
     </div>`;
   }).join('');
 
@@ -365,25 +381,34 @@ body{font:13px/1.55 "Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--q-t
 .cover .sheet-body{padding:0}
 
 /* header / footer */
-.sheet-head{position:relative;z-index:3;display:flex;align-items:center;gap:12px;padding:12px 34px 10px;border-bottom:3px solid var(--q-primary)}
+/* The printed letterhead rule is a double one — a thick brand line with a thin accent line
+   under it. The second line is a box-shadow rather than a second element, so it cannot be
+   pushed out of place by whatever the header happens to contain. */
+.sheet-head{position:relative;z-index:3;display:flex;align-items:center;gap:12px;padding:12px 34px 9px;border-bottom:3px solid var(--q-primary);box-shadow:0 2px 0 var(--q-accent)}
 .hd-logo{height:38px;width:auto;object-fit:contain}
 .hd-word{font-weight:700;font-size:17px;color:var(--q-primary);letter-spacing:.02em}
+.hd-logo + .hd-word{display:none}
 .hd-site{margin-left:auto;background:var(--q-primary);color:var(--band-fg);border-radius:20px;padding:5px 16px;font-size:11.5px;font-weight:600}
 .sheet-foot{position:absolute;left:0;right:0;bottom:0;z-index:3;display:flex;align-items:center;gap:14px;padding:10px 34px;background:var(--q-primary);color:var(--band-fg)}
 .ft-contact{display:flex;flex-wrap:wrap;gap:4px 18px;font-size:10.5px}
 .ft-logo{margin-left:auto;height:30px;background:#fff;border-radius:5px;padding:3px 7px}
 
 /* watermark */
-.wm{position:absolute;inset:0;z-index:1;opacity:.05;color:var(--q-primary);font-size:34px;font-weight:800;line-height:2.6;word-spacing:6px;transform:rotate(-24deg) scale(1.5);transform-origin:center;pointer-events:none;overflow:hidden}
+/* A whisper, not a pattern: at a heavier weight the wordmark competes with the paragraph it
+   sits behind and the page reads as smudged. */
+.wm{position:absolute;inset:0;z-index:1;opacity:.028;color:var(--q-primary);font-size:34px;font-weight:800;line-height:2.6;word-spacing:6px;transform:rotate(-24deg) scale(1.5);transform-origin:center;pointer-events:none;overflow:hidden}
 
 /* cover */
-.cover{padding:0}
+/* The brand gradient sits on the page itself, not only on the no-image fallback: a banner whose
+   url has expired then still leaves a branded cover instead of a grey void. */
+.cover{padding:0;background:linear-gradient(140deg,var(--q-primary),var(--q-primary-light))}
 .cv-hero{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .cv-hero-blank{background:linear-gradient(140deg,var(--q-primary),var(--q-primary-light))}
 .cv-veil{position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.42) 0%,rgba(0,0,0,.12) 34%,rgba(0,0,0,.62) 100%)}
 .cv-logo{position:absolute;top:34px;left:34px;z-index:3;height:92px;width:92px;object-fit:contain;background:#fff;border-radius:50%;padding:9px;box-shadow:0 3px 14px rgba(0,0,0,.25)}
 .cv-logo-word{position:absolute;top:40px;left:34px;z-index:3;color:#fff;font-size:24px;font-weight:800;letter-spacing:.04em;text-shadow:0 2px 10px rgba(0,0,0,.4)}
 .cv-logo-word.dark{position:static;color:var(--q-primary);text-shadow:none}
+.cv-logo + .cv-logo-word{display:none}
 .cv-title{position:absolute;left:0;right:0;top:46%;z-index:3;text-align:center;color:#fff;padding:0 40px}
 .cv-title h1{margin:0;font-size:68px;line-height:.98;font-weight:800;letter-spacing:-.01em;text-transform:uppercase;text-shadow:0 4px 22px rgba(0,0,0,.45)}
 .cv-tag{margin-top:14px;display:inline-block;background:rgba(255,255,255,.93);color:var(--q-primary);border-radius:7px;padding:7px 22px;font-size:19px;font-style:italic;font-weight:700}
@@ -403,18 +428,20 @@ body{font:13px/1.55 "Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--q-t
 /* bands & text */
 .band{background:var(--q-tint);border-left:5px solid var(--q-accent);color:var(--q-primary);font-size:15px;font-weight:700;padding:9px 14px;border-radius:5px;margin:18px 0 12px}
 .sheet-body > .band:first-child{margin-top:4px}
+.tband{background:var(--q-primary);color:var(--band-fg);border:2px solid var(--q-accent);border-radius:6px;text-align:center;text-transform:uppercase;font-size:17px;font-weight:800;letter-spacing:.07em;padding:11px 16px;margin:4px 0 15px}
 .greet{margin:6px 0}
 .lead{margin:8px 0 4px;text-align:justify}
 h3{margin:0 0 5px;color:var(--q-primary);font-size:14.5px}
 
 /* fact grid */
-.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:12px 18px;margin:14px 0 6px}
+.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:11px 18px;margin:14px 0 6px}
+.fact{border-bottom:1px solid var(--q-soft);padding-bottom:5px}
 .fk{color:#8a93a4;font-size:10.5px;font-weight:600;letter-spacing:.05em}
 .fv{font-size:14px;font-weight:700;color:var(--q-primary)}
 
 /* price */
 .price{width:100%;border-collapse:collapse;margin-top:4px}
-.price th{background:#fff;border:1px solid var(--q-soft);text-align:left;padding:9px 14px;font-size:12.5px;color:var(--q-text)}
+.price th{background:var(--q-tint);border:1px solid var(--q-soft);text-align:left;padding:9px 14px;font-size:12.5px;font-weight:700;color:var(--q-primary)}
 .price td{border:1px solid var(--q-soft);padding:12px 14px;vertical-align:top}
 .price .big{display:block;font-size:27px;font-weight:800;color:var(--q-primary);line-height:1.1}
 .price small{color:#8a93a4;font-size:11px}

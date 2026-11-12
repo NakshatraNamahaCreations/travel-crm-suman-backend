@@ -1,7 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { company } from '../config/company.js';
+import { orgIdentity, orgBank } from './orgIdentity.js';
+
+// The share of the total asked for up front. A plain business default, not one agency's
+// setting: nothing here identifies a company.
+const DEFAULT_ADVANCE_PERCENT = 50;
 import { quotationCoverIcon } from './quotationCoverIcons.js';
 import { resolveQuotationTheme, themeCss } from '../utils/quotationTheme.js';
 
@@ -90,20 +94,20 @@ const placeCode = (name) => {
 // Page letterhead — brand block uses the org profile's uploaded logo when
 // available (the wordmark image carries the name, so the text is dropped),
 // falling back to the palm icon + name from the static config.
-const letterhead = (brandHtml) => `
+const letterhead = (brandHtml, id) => `
   <div class="lh">
     <div class="brand">${brandHtml}</div>
     <div class="lh-col">
       <div class="lh-head"><span class="lh-ic">${quotationCoverIcon('pin')}</span><b>Address</b></div>
-      <div class="lh-val">${company.address.map(esc).join('<br/>')}</div>
+      <div class="lh-val">${id.addressLines.map(esc).join('<br/>')}</div>
     </div>
     <div class="lh-col wide">
       <div class="lh-head"><span class="lh-ic">${quotationCoverIcon('mail')}</span><b>Email</b></div>
-      <div class="lh-val">${company.emails.map(esc).join('<br/>')}</div>
+      <div class="lh-val">${id.emails.map(esc).join('<br/>')}</div>
     </div>
     <div class="lh-col">
       <div class="lh-head"><span class="lh-ic">${quotationCoverIcon('phone')}</span><b>Phone</b></div>
-      <div class="lh-val">${company.phones.map(esc).join('<br/>')}</div>
+      <div class="lh-val">${id.phones.map(esc).join('<br/>')}</div>
     </div>
   </div>`;
 
@@ -118,7 +122,10 @@ export function quotationHtml(q, org = null) {
         <div class="brandmark"><span></span></div>
         <div><div class="brandword"><b>IRSHAD</b><strong>TRAVELS</strong></div><div class="brandtag">YOUR MALDIVES SPECIALIST</div></div>
       </div>`;
-  const LETTERHEAD = letterhead(brandHtml);
+  // Everything the document says about the agency comes from this tenant's own profile.
+  const id = orgIdentity(org);
+  const bank = orgBank(org);
+  const LETTERHEAD = letterhead(brandHtml, id);
   const logoIcon = orgLogo ? `<img class="logoimg" src="${orgLogo}"/>` : '<div class="logo">&#129517;</div>';
   const qlogoIcon = orgLogo ? `<img class="logoimg lg" src="${orgLogo}"/>` : '<div class="qlogo">&#129517;</div>';
   const pkg = (q.packages || [])[q.selectedPackageIndex || 0] || {};
@@ -148,10 +155,10 @@ export function quotationHtml(q, org = null) {
   const gstPct = pkg.taxPercent || (p.subtotal + p.markup ? Math.round((p.tax / (p.subtotal + p.markup)) * 100) : 0);
   const taxable = (p.subtotal || 0) + (p.markup || 0);
   const perPerson = pax ? Math.round((p.total || 0) / pax) : 0;
-  const advance = Math.round(((p.total || 0) * company.advancePercent) / 100);
+  const advance = Math.round(((p.total || 0) * DEFAULT_ADVANCE_PERCENT) / 100);
 
-  const inclusions = q.inclusions?.length ? q.inclusions : company.defaultInclusions;
-  const exclusions = q.exclusions?.length ? q.exclusions : company.defaultExclusions;
+  const inclusions = q.inclusions || [];
+  const exclusions = q.exclusions || [];
 
   // How THIS organization's document looks: its palette, the cover banner matching the trip's
   // destination, and its own Terms & Conditions. Everything it has not customised falls back
@@ -169,8 +176,8 @@ export function quotationHtml(q, org = null) {
     names: bannerNames,
   });
   const tcSections = theme.terms;
-  const whyUs = company.whyUs || {};
-  const gallery = company.galleryImages || [];
+  const whyUs = { points: (org?.quotation?.whyUs || []).map((w) => ({ title: w.title, text: w.text })) };
+  const gallery = [];
 
   // ---- Ferry / transfer table ----
   // Static schedule fallback: match ferry name keyword + sector code (PB>HL ...)
@@ -181,7 +188,7 @@ export function quotationHtml(q, org = null) {
   };
   const staticTimes = (name, loc) => {
     const n = String(name || '').toLowerCase();
-    const entry = (company.ferrySchedule || []).find((f) => n.includes(f.match));
+    const entry = null; // the static config held one region's ferry timetable
     return entry?.times?.[sectorKey(loc)] || null;
   };
   const transports = pkg.transports || [];
@@ -311,7 +318,7 @@ export function quotationHtml(q, org = null) {
       const totalWithGst = p.taxApplied ? (p.sellingPrice || 0) : Math.round((p.sellingPrice || 0) * (1 + gstPct / 100));
       const payable = Math.round(totalWithGst / 2);
       return `<div class="seccard">
-        <div class="sechead teal"><span class="shic">&#127976;</span><span class="shnum">2</span> ${label}${company.hotelOptionNote ? `<span class="shnote">(${esc(company.hotelOptionNote)})</span>` : ''}</div>
+        <div class="sechead teal"><span class="shic">&#127976;</span><span class="shnum">2</span> ${label}</div>
         <div class="tbl flat"><table>
           <thead><tr><th>Hotel Name</th><th>Type of Room</th><th>Place</th><th>&#35; Rooms</th><th>&#35; Nights</th><th>Adult<br/>Extra Bed</th><th>Child<br/>Extra Bed</th><th>Child<br/>No Bed</th><th>Meal Plan</th></tr></thead>
           <tbody>${hotelRowsOf(p.hotels)}</tbody></table>
@@ -334,12 +341,15 @@ export function quotationHtml(q, org = null) {
   // Cover artwork pieces (see company.coverArtwork): the wave footer and the
   // association emblems are upscaled crops; Google / Tripadvisor marks are the
   // bundled logo files. Any missing file falls back to the CSS-drawn version.
-  const coverArt = company.coverArtwork || {};
+  const coverArt = {};
   const waveImg = coverArt.wave ? assetUri(coverArt.wave) : '';
   const aatoImg = coverArt.aato ? assetUri(coverArt.aato) : '';
   const adtoiImg = coverArt.adtoi ? assetUri(coverArt.adtoi) : '';
   const googleImg = assetUri('google-logo.png');
   const taImg = assetUri('ta-logo.png');
+  // The cover band used to end "Tour to the Maldives" whatever the trip was. It now names the
+  // destinations on the query, and says nothing when there are none.
+  const coverDestLine = (q.query?.destinations || []).map((d) => d?.name || d).filter(Boolean).join(', ');
   const destItems = (() => {
     const m = new Map();
     primaryHotels.forEach((h) => { const c = h.city || ''; if (c) m.set(c, (m.get(c) || 0) + ((h.nights || []).length || 1)); });
@@ -349,7 +359,7 @@ export function quotationHtml(q, org = null) {
   // wins, then its default banner, then the bundled artwork, then any gallery image. A trip to
   // Kashmir must not go out under an Andaman cover, which is exactly what a single configured
   // hero image produced before.
-  const configuredHero = theme.banner.image || company.heroImage || '';
+  const configuredHero = theme.banner.image || '';
   const heroHasEmbeddedArtwork = Boolean(configuredHero && !/^(https?:|data:)/i.test(configuredHero));
   const heroImg = configuredHero
     ? (heroHasEmbeddedArtwork ? assetUri(configuredHero) : configuredHero)
@@ -392,7 +402,7 @@ export function quotationHtml(q, org = null) {
   // Photo for a service, matched by keyword against company.itineraryImages.
   const svcImage = (text) => {
     const s = String(text || '').toLowerCase();
-    const hit = (company.itineraryImages || []).find((e) => String(e.match).split('|').some((k) => k && s.includes(k)));
+    const hit = null; // stock photos belonged to the static config, not to this tenant
     return hit?.image || '';
   };
   const activities = pkg.activities || [];
@@ -619,7 +629,7 @@ export function quotationHtml(q, org = null) {
   }).join('') || '<p class="muted">No day-wise itinerary added.</p>';
 
   // ---- Optional activities (poster-style card grid) ----
-  const optActs = (company.optionalActivities || []).map((a) => {
+  const optActs = [].map((a) => {
     const src = a.image ? (/^https?:/i.test(a.image) ? a.image : assetUri(a.image)) : '';
     return `<div class="oacard2">
       ${src ? `<img class="oa-img" src="${esc(src)}" alt=""/>` : ''}
@@ -669,14 +679,14 @@ export function quotationHtml(q, org = null) {
       <div class="aihead">${title}</div>
       <div class="aibody">${(items || []).map((x) => `<div class="aiitem"><span class="dot"></span><span>${esc(x)}</span></div>`).join('')}</div>
     </div>`;
-  const paymentQr = company.paymentQrImage
-    ? (/^https?:/i.test(company.paymentQrImage) ? company.paymentQrImage : assetUri(company.paymentQrImage))
-    : '';
-  const ecRows = (company.emergencyContacts || []).map((c) => `<tr>
+  // The scan-to-pay image belonged to the static config's own account; there is no per-tenant
+  // equivalent yet, so the card is left out rather than showing someone else's QR code.
+  const paymentQr = '';
+  const ecRows = [].map((c) => `<tr>
     <td>${esc(c.name)}</td><td>${esc(c.phone)}</td>
     <td>${esc(c.email)}</td><td>${esc(c.availableOn)}</td>
   </tr>`).join('');
-  const socialIcons = (company.social || []).map((s) => `
+  const socialIcons = [].map((s) => `
     <a class="soc" href="${esc(s.url)}">
       <span class="socicon" style="background:${esc(s.color)}">${s.short}</span>
       <span class="soclbl">${esc(s.label)}</span>
@@ -1158,10 +1168,7 @@ export function quotationHtml(q, org = null) {
       <div class="hx-why">Turquoise Seas<span>Memorable Journeys</span></div>
     </div>`}
   </div>` : ''}
-  ${(company.coverIncludes || []).length ? `<div class="cover-includes">
-    ${company.coverIncludes.map((it) => `<div class="ci-item"><div class="ci-icon">${quotationCoverIcon(it.icon)}</div><div class="ci-label">${esc(it.label)}${it.sub ? `<span class="ci-sub">${esc(it.sub)}</span>` : ''}</div></div>`).join('')}
-  </div>` : ''}
-  <div class="coverband"><span class="cb-date">${start ? new Date(start).getDate() : '&mdash;'}</span><span>${q.nights} Nights ${(q.nights || 0) + 1} Days ${esc(pkg.name || 'Package')} Tour to the Maldives</span></div>
+  <div class="coverband"><span class="cb-date">${start ? new Date(start).getDate() : '&mdash;'}</span><span>${q.nights} Nights ${(q.nights || 0) + 1} Days ${esc(pkg.name || 'Package')}${coverDestLine ? ` Tour to ${esc(coverDestLine)}` : ''}</span></div>
   ${destItems.length ? `<div class="destcov">
     <div class="dc-head">${quotationCoverIcon('pin')} Destination Covered</div>
     <div class="dc-row">${destItems.map(([c, n]) => `<span class="dc-item"><span class="dc-pin">${quotationCoverIcon('pin')}</span>${esc(c)} &ndash; ${n}</span>`).join('')}</div>
@@ -1253,7 +1260,7 @@ export function quotationHtml(q, org = null) {
   <div style="margin-bottom:16px">${introRows}</div>` : ''}
   <div class="band">${q.nights}N${(q.nights || 0) + 1}D Day Wise Itinerary:</div>
   <div class="grow">${vehicleSummary ? `<div class="notestrip vehstrip"><span class="ni"><span class="tlemoji">&#128663;</span></span><b>TRANSPORT</b><span class="nsdiv"></span><span>${vehicleSummary}</span></div>` : ''}${dayBlocks}
-  ${company.itineraryNote ? `<div class="notestrip"><span class="ni">&#8505;</span><b>PLEASE NOTE</b><span class="nsdiv"></span><span>${esc(company.itineraryNote)}</span></div>` : ''}</div>
+  
   ${extras ? `<div class="extra">
     <div class="el">EXTRA INCLUSIONS:</div>
     <div class="er">${esc(extras)}</div>
@@ -1277,19 +1284,19 @@ ${optActs ? `<div class="page pb">
 <div class="page pb">
   <div class="ai-banner">Additional Information</div>
   <div class="ai3col">
-    ${aiCard('Note', 'navy', company.notes)}
+    ${aiCard('Note', 'navy', [])}
     ${aiCard('Inclusions', 'green', inclusions)}
     ${aiCard('Exclusions', 'red', exclusions)}
   </div>
-  <div class="payrow">
+  ${bank ? `<div class="payrow">
     <div class="paycard">
       <div class="payh">Payment Information</div>
       <table class="paytbl">
-        <tr><td class="pk">Account Name</td><td>${esc(company.bank.holder)}</td></tr>
-        <tr><td class="pk">Account Number</td><td>${esc(company.bank.accNo)}</td></tr>
-        <tr><td class="pk">IFSC Code</td><td>${esc(company.bank.ifsc)}</td></tr>
-        <tr><td class="pk">Branch</td><td>${esc(company.bank.address)}</td></tr>
-        <tr><td class="pk">Bank Name</td><td>${esc(company.bank.bank)}</td></tr>
+        ${bank.holder ? `<tr><td class="pk">Account Name</td><td>${esc(bank.holder)}</td></tr>` : ''}
+        ${bank.accNo ? `<tr><td class="pk">Account Number</td><td>${esc(bank.accNo)}</td></tr>` : ''}
+        ${bank.ifsc ? `<tr><td class="pk">IFSC Code</td><td>${esc(bank.ifsc)}</td></tr>` : ''}
+        ${bank.branch ? `<tr><td class="pk">Branch</td><td>${esc(bank.branch)}</td></tr>` : ''}
+        ${bank.bank ? `<tr><td class="pk">Bank Name</td><td>${esc(bank.bank)}</td></tr>` : ''}
       </table>
       <div class="paynote"><span>For payment made through bank transfer, please give us at least 30 minutes so we can confirm payment with the bank.</span></div>
     </div>
@@ -1297,7 +1304,7 @@ ${optActs ? `<div class="page pb">
       <div class="payh">Scan to Pay</div>
       <div class="scanbody"><img src="${esc(paymentQr)}" alt=""/></div>
     </div>` : ''}
-  </div>
+  </div>` : ''}
   ${ecRows ? `<div class="emcard">
     <div class="emh">Emergency Contact Information</div>
     <table class="emtbl">
@@ -1307,7 +1314,7 @@ ${optActs ? `<div class="page pb">
   </div>` : ''}
   <div class="thanks">
     <div class="th1">THANK YOU!</div>
-    <div class="th2">Thank you for choosing ${esc(company.name)}!</div>
+    ${id.name ? `<div class="th2">Thank you for choosing ${esc(id.name)}!</div>` : ''}
   </div>
   ${BOTTOMBAR}
 </div>
@@ -1318,29 +1325,29 @@ ${optActs ? `<div class="page pb">
   <div class="cocard2">
     <div class="co-brand">
       ${logoIcon}
-      <div class="co-name">${esc(company.name)}</div>
-      <div class="co-web">&#127760; ${esc(company.website)}</div>
+      <div class="co-name">${esc(id.name)}</div>
+      ${id.websiteLabel ? `<div class="co-web">&#127760; ${esc(id.websiteLabel)}</div>` : ''}
     </div>
     <div class="co-col">
       <div class="co-h"><span class="co-ic">&#128205;</span> Address</div>
-      <div class="co-v">${company.address.map(esc).join('<br/>')}</div>
+      <div class="co-v">${id.addressLines.map(esc).join('<br/>')}</div>
     </div>
     <div class="co-col">
       <div class="co-h"><span class="co-ic">&#128222;</span> Contact</div>
       <div class="co-v">
-        ${company.phones.map((ph) => `<span class="cv-ic">&#128222;</span>${esc(ph)}`).join('<br/>')}<br/>
-        <span class="cv-ic">&#9993;</span>${esc(company.emails[0])}
+        ${id.phones.map((ph) => `<span class="cv-ic">&#128222;</span>${esc(ph)}`).join('<br/>')}<br/>
+        ${id.email ? `<span class="cv-ic">&#9993;</span>${esc(id.email)}` : ''}
       </div>
     </div>
   </div>
   <div class="support2">
     <span class="sup-ic">&#127911;</span>
     <div>For any support, changes or requests regarding this itinerary, please contact your assigned representative.
-    For any complaints or grievances, please email us at <b>${esc(company.emails[0])}</b> or call us at <b>${esc(company.phones[0])}</b>.</div>
+    ${id.email || id.phone ? `For any complaints or grievances, please contact us${id.email ? ` at <b>${esc(id.email)}</b>` : ''}${id.phone ? ` or call us at <b>${esc(id.phone)}</b>` : ''}.` : ''}</div>
   </div>
 
   <div class="secban" style="margin-top:14px"><span class="sbic">&#128196;</span> Terms &amp; Conditions</div>
-  <div class="tcintro2">These terms and conditions apply to all services and bookings provided by ${esc(company.name)}.</div>
+  <div class="tcintro2">${id.name ? `These terms and conditions apply to all services and bookings provided by ${esc(id.name)}.` : ''}</div>
   ${tcSectionsHtml}
   ${BOTTOMBAR}
 </div>
@@ -1363,17 +1370,17 @@ ${optActs ? `<div class="page pb">
       <h3>Read More Reviews:</h3>
       ${reviewRows}
     </div>
-    <div class="searchpill"><span><b style="color:#4285f4">G</b>&nbsp; ${esc(company.name)}</span><span>&#128269;</span></div>
+    <div class="searchpill"><span><b style="color:#4285f4">G</b>&nbsp; ${esc(id.name)}</span><span>&#128269;</span></div>
   </div>` : ''}
-  <div class="disclaimer">The information contained in this document and electronic transmission can be privileged, and not available for disclosure. All information contained is owned by ${esc(company.name)}. Any unauthorized sharing and upload are prohibited. Terms &amp; Conditions: ${esc(company.website)}/terms-and-conditions</div>
+  <div class="disclaimer">The information contained in this document and electronic transmission can be privileged, and not available for disclosure.${id.name ? ` All information contained is owned by ${esc(id.name)}.` : ''} Any unauthorized sharing and upload are prohibited.${id.websiteLabel ? ` Terms &amp; Conditions: ${esc(id.websiteLabel)}/terms-and-conditions` : ''}</div>
   <div class="qcard">
     ${qlogoIcon}
-    <div class="qtag">${esc(company.tagline)}</div>
+    ${id.tagline ? `<div class="qtag">${esc(id.tagline)}</div>` : ''}
     ${socialIcons ? `<div style="font-size:10px;color:#46566a;margin-top:14px;font-weight:700">Find us in the Social World:</div>
     <div class="socialrow">${socialIcons}</div>` : ''}
   </div>
   <div class="eod">End&nbsp;of&nbsp;Document</div>
-  <div class="cpr">&copy; ${esc(company.name)} &nbsp;&#124;&nbsp; ${esc(company.website)}</div>
+  <div class="cpr">&copy; ${esc(id.name)}${id.websiteLabel ? ` &nbsp;&#124;&nbsp; ${esc(id.websiteLabel)}` : ''}</div>
 </div>
 
 </body></html>`;

@@ -11,7 +11,7 @@
 // now; a malformed colour or a deleted banner must degrade to the default, not produce an
 // error page.
 
-import { company } from '../config/company.js';
+
 
 // The palette the document was built with. Each key maps to one role rather than one element,
 // so a tenant picking two colours gets a coherent document instead of having to name nineteen
@@ -91,7 +91,9 @@ export function resolveColors(org) {
  */
 export function resolveTerms(org) {
   const stored = org?.quotation?.terms;
-  if (!Array.isArray(stored)) return Array.isArray(company.termsAndConditions) ? company.termsAndConditions : [];
+  // A tenant who has written no terms prints none. The static config held one real
+  // agency's fourteen sections, which another agency must not issue under its own name.
+  if (!Array.isArray(stored)) return [];
   return [...stored]
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
     .map((s) => ({
@@ -106,7 +108,7 @@ export function resolveTerms(org) {
 /** The booking-terms one-liner printed under the price. */
 export function resolveBookingTerms(org) {
   const v = org?.quotation?.bookingTerms;
-  return isBlank(v) ? company.bookingTerms || '' : String(v).trim();
+  return isBlank(v) ? '' : String(v).trim();
 }
 
 /** Normalizes the words a banner matches on. */

@@ -1,4 +1,4 @@
-import { company } from '../config/company.js';
+import { orgIdentity } from './orgIdentity.js';
 import { amountInWords } from './proformaHtml.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -13,7 +13,9 @@ const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('en-GB', { day: '2-di
 export function gstInvoiceHtml(inv, org = null) {
   const q = inv.query || {};
   const logo = org?.images?.logo;
-  const seller = inv.seller || {};
+  // A tax invoice naming the wrong company is a filing problem, so nothing here falls
+  // back to a shared config: the snapshot first, then this tenant's own profile.
+  const seller = orgIdentity(org, inv.seller);
   const buyer = inv.buyer || {};
   const cur = inv.currency || 'INR';
   const isInter = inv.taxType === 'inter';
@@ -73,9 +75,9 @@ export function gstInvoiceHtml(inv, org = null) {
     </div>
     <div class="letterhead">
       ${logo ? `<img src="${logo}"/>` : ''}
-      <div class="name">${esc(seller.name || company.name)}</div>
-      <div class="line">${esc(seller.address || (company.address || []).join(', '))}</div>
-      <div class="line">GSTIN: ${esc(seller.gstin || company.gstin || '')}${seller.pan ? ` &nbsp; PAN NO. ${esc(seller.pan)}` : ''}</div>
+      <div class="name">${esc(seller.name)}</div>
+      ${seller.addressLine ? `<div class="line">${esc(seller.addressLine)}</div>` : ''}
+      ${seller.gstin ? `<div class="line">GSTIN: ${esc(seller.gstin)}${seller.pan ? ` &nbsp; PAN NO. ${esc(seller.pan)}` : ''}</div>` : ''}
       <div class="line">${seller.email ? `Email ID: ${esc(seller.email)}` : ''}${seller.phone ? ` &nbsp; ${esc(seller.phone)}` : ''}</div>
     </div>
     <div class="parties">
@@ -126,7 +128,7 @@ export function gstInvoiceHtml(inv, org = null) {
     <div class="sign">
       <div></div>
       <div style="text-align:center">
-        <div class="for">For : ${esc(seller.name || company.name)}</div>
+        <div class="for">For : ${esc(seller.name)}</div>
         <div style="height:46px"></div>
         <div class="auth">Authorised Signatory</div>
       </div>

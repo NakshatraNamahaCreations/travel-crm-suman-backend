@@ -1,4 +1,5 @@
-import { company } from '../config/company.js';
+import { orgBank } from './orgIdentity.js';
+import { resolveTerms } from '../utils/quotationTheme.js';
 
 /**
  * Booking vouchers (Sembark-style Docs tab): one template, three types —
@@ -31,7 +32,7 @@ export function voucherHtml(quote, { org = null, type = 'trip', options = {} } =
   } = options;
   const q = quote.query || {};
   const pkg = pkgOf(quote) || {};
-  const brand = org?.brandName || org?.officialName || company.name;
+  const brand = org?.brandName || org?.officialName || '';
   const tripId = q.queryNumber ?? '';
   const guestName = [q.guest?.salutation, q.guest?.name].filter(Boolean).join(' ') || 'Guest';
   const guestPh = q.guest?.phones?.[0] ? `+${q.guest.phones[0].countryCode || '91'}-${q.guest.phones[0].number}` : '—';
@@ -181,7 +182,7 @@ export function voucherHtml(quote, { org = null, type = 'trip', options = {} } =
   /* ---- terms & conditions ---- */
   const tncHtml = tnc ? `
     ${bandRow('Terms and Conditions')}
-    ${(company.termsAndConditions || []).map((sec) => `
+    ${resolveTerms(org).map((sec) => `
       <div class="tncsec">
         <p class="tnchead">${esc(sec.heading)}</p>
         ${sec.intro ? `<p class="li">${esc(sec.intro)}</p>` : ''}
@@ -196,7 +197,8 @@ export function voucherHtml(quote, { org = null, type = 'trip', options = {} } =
       </div>`).join('')}` : '';
 
   /* ---- bank account ---- */
-  const bank0 = (org?.bankAccounts || [])[0] || (company.bank ? { holder: company.bank.holder, bank: company.bank.bank, branch: company.bank.address, ifsc: company.bank.ifsc, accNo: company.bank.accNo } : null);
+  // No shared fallback: a guest paying a voucher must not be shown another agency's account.
+  const bank0 = orgBank(org);
   const bankHtml = bankAccount && bank0 ? `
     ${bandRow('Bank Account Details')}
     <table class="kvt">
@@ -207,9 +209,9 @@ export function voucherHtml(quote, { org = null, type = 'trip', options = {} } =
     </table>` : '';
 
   /* ---- helpline ---- */
-  const phones = (org?.supportPhones?.length ? org.supportPhones : company.phones) || [];
+  const phones = org?.supportPhones || [];
   const shortName = org?.brandName && org?.officialName && org.brandName !== org.officialName
-    ? `${org.brandName} (${org.officialName})` : (org?.officialName || company.name);
+    ? `${org.brandName} (${org.officialName})` : (org?.officialName || org?.brandName || '');
   const helpline = `
     <table class="grid help">
       <tr><th colspan="3">Helpline</th></tr>

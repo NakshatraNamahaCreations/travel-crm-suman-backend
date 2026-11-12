@@ -7,7 +7,7 @@ import { ApiError } from '../utils/ApiError.js';
 import { uploadImage, uploadImageUnique, cloudinaryEnabled } from '../utils/cloudinary.js';
 import { DEFAULT_COLORS, COLOR_ROLES, cleanColor } from '../utils/quotationTheme.js';
 import { QUOTATION_TEMPLATES } from '../pdf/renderQuotation.js';
-import { company } from '../config/company.js';
+
 
 const router = Router();
 router.use(protect);
@@ -132,8 +132,11 @@ router.get('/quotation-defaults', asyncHandler(async (req, res) => ok(res, {
   colors: DEFAULT_COLORS,
   templates: QUOTATION_TEMPLATES,
   roles: COLOR_ROLES,
-  terms: (company.termsAndConditions || []).map((s, i) => ({ ...s, order: i })),
-  bookingTerms: company.bookingTerms || '',
+  // No starter text: the sections the static config held were one real agency's, and
+  // another agency must not issue them under its own name. An empty list means the editor
+  // offers nothing to reset to, which is the honest answer.
+  terms: [],
+  bookingTerms: '',
 })));
 
 // PUT /api/org-profile — admins/managers edit the org details

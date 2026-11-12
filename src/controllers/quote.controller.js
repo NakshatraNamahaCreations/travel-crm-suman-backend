@@ -16,7 +16,7 @@ import { sendMail, emailEnabled } from '../utils/mailer.js';
 import { sendWhatsAppText, whatsappEnabled } from '../utils/whatsapp.js';
 import { env } from '../config/env.js';
 import { resolveSessionId } from './whatsappConnection.controller.js';
-import { company } from '../config/company.js';
+import { orgIdentity } from '../pdf/orgIdentity.js';
 import { logActivity } from './activity.controller.js';
 import { syncBookingFromQuote } from '../utils/bookingSync.js';
 import { resyncServiceBookings } from './serviceBooking.controller.js';
@@ -450,13 +450,17 @@ export const emailQuote = asyncHandler(async (req, res) => {
   const org = await OrgProfile.getFor(req.organizationId).catch(() => null);
   const pdf = await htmlToPdf(renderQuotation(obj, org?.toObject()));
   const guestName = [obj.query?.guest?.salutation, obj.query?.guest?.name].filter(Boolean).join(' ') || 'Guest';
+  const sender = orgIdentity(org?.toObject?.() || org);
   await sendMail({
     to,
-    subject: `Your Maldives Tour Quotation #${quote.quoteNumber} — ${company.name}`,
+    // Named after this tenant and this trip. It used to say "Maldives" and sign off with the
+    // static config's agency, so a Kashmir quotation went out as a Maldives one from a
+    // company the sender had never heard of.
+    subject: `Your Tour Quotation #${quote.quoteNumber}${sender.name ? ` — ${sender.name}` : ''}`,
     html: `<p>Dear ${guestName},</p>
       <p>Thank you for your interest! Please find attached your tour quotation <b>#${quote.quoteNumber}</b>${obj.title ? ` (${obj.title})` : ''} totalling <b>₹${(obj.pricing?.total || 0).toLocaleString('en-IN')}</b>.</p>
-      <p>To confirm your booking, a ${company.advancePercent}% advance is payable. We'd love to host you in the Maldives!</p>
-      <p>Warm regards,<br/>${company.name}<br/>${company.phones[0]} · ${company.emails[0]}</p>`,
+      <p>Please go through it and let us know if you would like any changes.</p>
+      <p>Warm regards,${sender.name ? `<br/>${sender.name}` : ''}${[sender.phone, sender.email].filter(Boolean).length ? `<br/>${[sender.phone, sender.email].filter(Boolean).join(' · ')}` : ''}</p>`,
     attachments: [{ filename: `Quotation-${quote.quoteNumber}.pdf`, content: pdf }],
   });
 
@@ -484,7 +488,7 @@ export const shareEmail = asyncHandler(async (req, res) => {
 
   await sendMail({
     to,
-    subject: req.body.subject || `Your Maldives Package #${quote.quoteNumber} — ${company.name}`,
+    subject: req.body.subject || `Your Tour Package #${quote.quoteNumber}`,
     html,
     attachments,
   });

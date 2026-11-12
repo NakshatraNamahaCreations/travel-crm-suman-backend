@@ -1,10 +1,10 @@
 import mongoose from 'mongoose';
-import { company } from '../config/company.js';
 
-// Per-organization profile — the editable version of the static company
-// config (one document per tenant, auto-created from the config template on
-// first read). Documents that render seller / bank blocks (e.g. proforma
-// invoices) read from here so admins can update details without a code change.
+// Per-organization profile: who this tenant is, as printed on everything they send.
+// One document per tenant, created empty on first read. Documents that render seller / bank
+// blocks (quotations, proforma and tax invoices, vouchers) read from here and from nowhere
+// else — there is deliberately no shared fallback, because one agency's bank account or GSTIN
+// appearing on another's invoice sends money and tax filings to the wrong company.
 const addressSchema = new mongoose.Schema(
   {
     label: { type: String, trim: true },
@@ -136,23 +136,16 @@ orgProfileSchema.statics.getFor = async function getFor(orgId) {
   if (!orgId) throw new Error('OrgProfile.getFor: organization id is required');
   const existing = await this.findOne({ organization: orgId });
   if (existing) return existing;
-  return this.create({
-    organization: orgId,
-    officialName: company.name,
-    brandName: company.name,
-    supportPhones: company.phones || [],
-    emails: company.emails || [],
-    website: company.website || '',
-    contactAddresses: [
-      { label: 'Address', address: (company.address || []).join('\n'), phone: company.phones?.[0] || '', email: company.emails?.[0] || '', primary: true },
-    ],
-    billingAddresses: [
-      { label: 'Registered Office', address: (company.address || []).join('\n'), phone: company.phones?.[0] || '', email: company.emails?.[0] || '', gstin: company.gstin || '', primary: true },
-    ],
-    bankAccounts: company.bank
-      ? [{ holder: company.bank.holder, bank: company.bank.bank, branch: company.bank.address, ifsc: company.bank.ifsc, accNo: company.bank.accNo, currency: 'INR' }]
-      : [],
-  });
+  // A new tenant starts with its own name and nothing else.
+  //
+  // This used to be seeded from the static config in config/company.js, which meant every
+  // agency that signed up began life holding another agency's address, GSTIN and bank
+  // account — pre-filled in their settings and printed on any invoice they raised before
+  // noticing. Empty fields are simply left out of the documents.
+  const Org = mongoose.models.Organization;
+  const org = Org ? await Org.findById(orgId).select('name').lean() : null;
+  const name = org?.name || '';
+  return this.create({ organization: orgId, officialName: name, brandName: name });
 };
 
 export const OrgProfile = mongoose.model('OrgProfile', orgProfileSchema);

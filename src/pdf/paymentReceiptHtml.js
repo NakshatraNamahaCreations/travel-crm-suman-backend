@@ -1,4 +1,4 @@
-import { company } from '../config/company.js';
+
 import { amountInWords } from './proformaHtml.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -16,7 +16,9 @@ export function paymentReceiptHtml(inst, { org = null, mode = '', pax = '', tota
   const logo = org?.images?.logo;
   const headerBanner = org?.images?.headerBanner;
   const footerBanner = org?.images?.footerBanner;
-  const orgName = org?.officialName || company.name;
+  // This tenant's own name, or none — a receipt headed with another agency's name is a
+  // record of a payment made to someone else.
+  const orgName = org?.officialName || org?.brandName || '';
   const guestName = [inst.guest?.salutation, inst.guest?.name].filter(Boolean).join(' ') || 'Guest';
   const tripId = inst.tripId || '';
   const row = (k, v, extra = '') => `<tr><td class="k">${k}${extra ? `<div class="sub">${extra}</div>` : ''}</td><td class="v">${v}</td></tr>`;

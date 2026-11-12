@@ -1,4 +1,4 @@
-import { company } from '../config/company.js';
+import { orgIdentity, orgBank } from './orgIdentity.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const inr = (n) => `INR ${Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -32,11 +32,15 @@ export function proformaHtml(inv, org = null) {
   // Header banner intentionally NOT used here — the blue band + logo row is
   // the header (Sembark-style); only the footer banner renders.
   const footerBanner = org?.images?.footerBanner;
-  const seller = inv.seller || {};
+  // From this invoice's own snapshot, then the tenant's profile. Never a shared config:
+  // another agency's GSTIN on this invoice is a tax document naming the wrong company.
+  const seller = orgIdentity(org, inv.seller);
   const buyer = inv.buyer || {};
   // Bank block: invoice snapshot first (chosen from the org profile), static
   // config as the legacy fallback.
-  const bank = inv.bank && (inv.bank.accNo || inv.bank.bank) ? { ...inv.bank, address: inv.bank.branch } : (company.bank || {});
+  // null when nobody has set an account, so the payment block is left out rather than
+  // showing a borrowed one — a guest acts on whatever account number this page carries.
+  const bank = orgBank(org, inv.bank);
   const rows = (inv.items || []).map((it, i) => `
     <tr>
       <td class="sno">${i + 1}.</td>
@@ -92,7 +96,7 @@ export function proformaHtml(inv, org = null) {
     <div style="display:flex;align-items:center;gap:10px">
       ${logo
         ? `<img src="${logo}" style="height:52px;max-width:220px;object-fit:contain"/>`
-        : `<div class="logo">${esc((seller.name || company.name || 'T').charAt(0))}</div><div class="bn">${esc(seller.name || company.name)}</div>`}
+        : `<div class="logo">${esc((seller.name || 'T').charAt(0))}</div><div class="bn">${esc(seller.name)}</div>`}
     </div>
     <div class="metas">
       <div><div class="k">Issue Date</div><div class="v">${fmtDate(inv.createdAt)}</div></div>
@@ -103,10 +107,10 @@ export function proformaHtml(inv, org = null) {
   <div class="parties">
     <div>
       <div class="lab">SELLER</div>
-      <div class="pname">${esc(seller.name || company.name)}</div>
-      <div class="addr">${esc(seller.address || (company.address || []).join(' ')).replace(/\n/g, '<br/>')}</div>
-      <div>${esc(seller.phone || company.phones?.[0] || '')} &bull; ${esc(seller.email || company.emails?.[0] || '')}</div>
-      ${seller.gstin || company.gstin ? `<div class="muted">GSTIN: ${esc(seller.gstin || company.gstin)}</div>` : ''}
+      <div class="pname">${esc(seller.name)}</div>
+      ${seller.addressLine ? `<div class="addr">${seller.addressLines.map(esc).join('<br/>')}</div>` : ''}
+      ${seller.phone || seller.email ? `<div>${[seller.phone, seller.email].filter(Boolean).map(esc).join(' &bull; ')}</div>` : ''}
+      ${seller.gstin ? `<div class="muted">GSTIN: ${esc(seller.gstin)}</div>` : ''}
     </div>
     <div class="buyer">
       <div class="lab">BUYER (BILL TO)</div>
@@ -126,15 +130,15 @@ export function proformaHtml(inv, org = null) {
     <div class="eoe">E. &amp; O.E.</div>
   </div>
   <hr/>
-  <div class="bank">
+  ${bank ? `<div class="bank">
     <div class="lab">SELLER&rsquo;S BANK DETAILS</div>
     ${inv.bankAccount ? `<div><b>Account:</b> ${esc(inv.bankAccount)}</div>` : ''}
-    <div>Bank Name: ${esc(bank.bank || '')}</div>
-    <div>A/c Holder Name: ${esc(bank.holder || '')}</div>
-    <div>A/c No. ${esc(bank.accNo || '')}</div>
-    <div>IFSC: ${esc(bank.ifsc || '')}</div>
-    ${bank.address ? `<div>Branch: ${esc(bank.address)}</div>` : ''}
-  </div>
+    ${bank.bank ? `<div>Bank Name: ${esc(bank.bank)}</div>` : ''}
+    ${bank.holder ? `<div>A/c Holder Name: ${esc(bank.holder)}</div>` : ''}
+    ${bank.accNo ? `<div>A/c No. ${esc(bank.accNo)}</div>` : ''}
+    ${bank.ifsc ? `<div>IFSC: ${esc(bank.ifsc)}</div>` : ''}
+    ${bank.branch ? `<div>Branch: ${esc(bank.branch)}</div>` : ''}
+  </div>` : ''}
   ${inv.specialNotes ? `<div class="notes"><div class="lab">SPECIAL NOTES</div><p>${esc(inv.specialNotes).replace(/\n/g, '<br/>')}</p></div>` : ''}
   ${inv.terms ? `<div class="notes"><div class="lab">TERMS AND CONDITIONS</div><p>${esc(inv.terms).replace(/\n/g, '<br/>')}</p></div>` : ''}
   <div class="foot">This is a computer generated document. No signature required.</div>
