@@ -108,9 +108,12 @@ const orgProfileSchema = new mongoose.Schema(
         )],
         default: undefined,
       },
-      // Faint repeating wordmark behind each page, as on a printed brochure. Defaults to the
-      // brand name when left empty; set to a single space to switch it off.
+      // Faint repeating wordmark behind each page, as on a printed brochure. Empty means
+      // "use the brand name". Switching it OFF is a separate boolean rather than a blank or
+      // whitespace value: `trim: true` below would erase a whitespace sentinel on save, and
+      // the document would quietly keep printing the watermark the tenant had turned off.
       watermark: { type: String, trim: true },
+      watermarkOff: { type: Boolean, default: false },
       colors: {
         primary: { type: String, trim: true }, // headings, section bars, cover text
         accent: { type: String, trim: true }, // price highlights, call-outs

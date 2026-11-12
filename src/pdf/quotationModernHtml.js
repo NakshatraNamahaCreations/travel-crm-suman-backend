@@ -83,10 +83,9 @@ function orgInfo(org) {
     address: String(addr.address || '').split('\n').filter(Boolean).join(', '),
     addressLines: String(addr.address || '').split('\n').filter(Boolean),
     tagline: q.tagline || '',
-    // A blank watermark means "use the brand name"; a single space means "none at all".
-    watermark: q.watermark === undefined || q.watermark === null || q.watermark === ''
-      ? name
-      : (String(q.watermark).trim() ? String(q.watermark) : ''),
+    // Off beats text: a tenant who switched the watermark off but left old text behind must
+    // not keep seeing it.
+    watermark: q.watermarkOff ? '' : (String(q.watermark || '').trim() || name),
     whyUs: (q.whyUs || []).filter((w) => w?.title || w?.text),
   };
 }

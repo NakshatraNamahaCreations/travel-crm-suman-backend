@@ -53,9 +53,8 @@ function cleanQuotation(input) {
     out.template = input.template;
   }
   if (input.tagline !== undefined) out.tagline = String(input.tagline || '').trim().slice(0, 120) || undefined;
-  // An empty watermark means "use the brand name"; a single space switches it off. Both are
-  // meaningful, so neither is normalized away here.
-  if (input.watermark !== undefined) out.watermark = String(input.watermark ?? '').slice(0, 60);
+  if (input.watermark !== undefined) out.watermark = String(input.watermark ?? '').trim().slice(0, 60);
+  if (input.watermarkOff !== undefined) out.watermarkOff = !!input.watermarkOff;
   if (input.whyUs !== undefined) {
     if (!Array.isArray(input.whyUs)) throw ApiError.badRequest('Why-us points must be a list');
     out.whyUs = input.whyUs
